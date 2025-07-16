@@ -1,0 +1,195 @@
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local player = Players.LocalPlayer
+
+local RANDOMIZE_INTERVAL = 30
+local countdown = RANDOMIZE_INTERVAL
+local running = true
+local autoStopEnabled = true
+
+local EGG_NAMES = {
+    "Bug Egg", "Night Egg", "Mythical Egg", "Paradise Egg", "Oasis Egg", "Primal Egg", "Dinosaur Egg"
+}
+
+local PET_POOL = {
+    ["Bug Egg"] = {"Snail", "Caterpillar", "Giant Ant"},
+    ["Night Egg"] = {"Hedgehog", "Frog", "Echo Frog", "Blood Hedgehog", "Blood Kiwi"},
+    ["Mythical Egg"] = {"Squirrel", "Red Giant Ant", "Grey Mouse", "Brown Mouse"},
+    ["Paradise Egg"] = {"Ostrich", "Peacock", "Capybara", "Mimic Octopus"},
+    ["Oasis Egg"] = {"Meerkat", "Sandsnake", "Oxolotl"},
+    ["Primal Egg"] = {"Brontosaurus", "Spinosaurus", "Pterodactyl", "Raptor"},
+    ["Dinosaur Egg"] = {"Brontosaurus", "Raptor", "Pterodactyl"}
+}
+
+local AUTO_STOP_PET_NAMES = {
+    "Dragonfly", "Queen Bee", "Red Fox", "Raccoon", "Fennec Fox", "Mimic Octopus",
+    "T-Rex", "Brontosaurus", "Raptor", "Spinosaurus", "Pterodactyl"
+}
+
+local HIDDEN_AUTO_STOP_PETS = {}
+for _, name in ipairs(AUTO_STOP_PET_NAMES) do
+    HIDDEN_AUTO_STOP_PETS[name] = true
+end
+
+local function ensureCurrentPet(egg)
+    local sv = egg:FindFirstChild("CurrentPet")
+    if not sv then
+        sv = Instance.new("StringValue")
+        sv.Name = "CurrentPet"
+        sv.Value = ""
+        sv.Parent = egg
+    end
+    return sv
+end
+
+local function isPlayerNearby(egg)
+    local part = egg:FindFirstChildWhichIsA("BasePart")
+    local char = player.Character
+    if not part or not char or not char:FindFirstChild("HumanoidRootPart") then return false end
+    return (part.Position - char.HumanoidRootPart.Position).Magnitude <= 25
+end
+
+local function updateEggUI(egg)
+    local part = egg:FindFirstChildWhichIsA("BasePart")
+    local currentPet = egg:FindFirstChild("CurrentPet")
+    if not part or not currentPet then return end
+
+    if not isPlayerNearby(egg) then
+        local existing = egg:FindFirstChild("PetUI")
+        if existing then existing:Destroy() end
+        return
+    end
+
+    local ui = egg:FindFirstChild("PetUI")
+    if not ui then
+        ui = Instance.new("BillboardGui")
+        ui.Name = "PetUI"
+        ui.Adornee = part
+        ui.Size = UDim2.new(0, 200, 0, 60)
+        ui.StudsOffset = Vector3.new(0, 3, 0)
+        ui.AlwaysOnTop = true
+        ui.Parent = egg
+
+        local label = Instance.new("TextLabel")
+        label.Name = "Label"
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Color3.new(1, 1, 0)
+        label.TextScaled = true
+        label.Font = Enum.Font.GothamBold
+        label.Parent = ui
+    end
+
+    local label = ui:FindFirstChild("Label")
+    if label then
+        if not HIDDEN_AUTO_STOP_PETS[currentPet.Value] then
+            label.Text = egg.Name .. " → " .. currentPet.Value .. "\nTimer: " .. countdown .. "s"
+        else
+            label.Text = ""
+        end
+    end
+
+    if autoStopEnabled and table.find(AUTO_STOP_PET_NAMES, currentPet.Value) then
+        running = false
+    end
+end
+
+local function randomizeAllEggs()
+    for _, egg in ipairs(Workspace:GetDescendants()) do
+        if table.find(EGG_NAMES, egg.Name) then
+            local sv = ensureCurrentPet(egg)
+            sv.Value = PET_POOL[egg.Name][math.random(1, #PET_POOL[egg.Name])]
+            updateEggUI(egg)
+        end
+    end
+end
+
+local function createControlPanel()
+    if player.PlayerGui:FindFirstChild("ControlGui") then return end
+
+    local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+    gui.Name = "ControlGui"
+    gui.ResetOnSpawn = false
+
+    local frame = Instance.new("Frame", gui)
+    frame.Size = UDim2.new(0, 260, 0, 300)
+    frame.Position = UDim2.new(0.02, 0, 0.25, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+
+    local function makeBtn(text, y, color, callback)
+        local b = Instance.new("TextButton", frame)
+        b.Size = UDim2.new(1, -20, 0, 40)
+        b.Position = UDim2.new(0, 10, 0, y)
+        b.Text = text
+        b.Font = Enum.Font.GothamBold
+        b.TextScaled = true
+        b.TextColor3 = Color3.new(1, 1, 1)
+        b.BackgroundColor3 = color
+        b.MouseButton1Click:Connect(callback)
+        return b
+    end
+
+    makeBtn("Stop", 10, Color3.fromRGB(200, 50, 50), function() running = false end)
+    makeBtn("Resume", 60, Color3.fromRGB(50, 200, 50), function() running = true end)
+
+    local autoBtn
+    autoBtn = makeBtn("Auto Stop: ON", 110, Color3.fromRGB(255, 170, 0), function()
+        autoStopEnabled = not autoStopEnabled
+        autoBtn.Text = "Auto Stop: " .. (autoStopEnabled and "ON" or "OFF")
+    end)
+
+    local scroll = Instance.new("ScrollingFrame", frame)
+    scroll.Position = UDim2.new(0, 10, 0, 170)
+    scroll.Size = UDim2.new(1, -20, 0, 120)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, #AUTO_STOP_PET_NAMES * 20)
+    scroll.ScrollBarThickness = 6
+    scroll.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+
+    local layout = Instance.new("UIListLayout", scroll)
+    layout.Padding = UDim.new(0, 2)
+
+    local title = Instance.new("TextLabel", scroll)
+    title.Size = UDim2.new(1, 0, 0, 20)
+    title.Text = "Auto-Stop Pets:"
+    title.BackgroundTransparency = 1
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 16
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = scroll
+
+    for _, name in ipairs(AUTO_STOP_PET_NAMES) do
+        local label = Instance.new("TextLabel", scroll)
+        label.Size = UDim2.new(1, 0, 0, 18)
+        label.Text = " - " .. name
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.BackgroundTransparency = 1
+        label.TextXAlignment = Enum.TextXAlignment.Left
+    end
+end
+
+task.spawn(function()
+    while true do
+        if running then
+            countdown -= 1
+            if countdown <= 0 then
+                countdown = RANDOMIZE_INTERVAL
+                randomizeAllEggs()
+            end
+        end
+        for _, egg in ipairs(Workspace:GetDescendants()) do
+            if table.find(EGG_NAMES, egg.Name) then
+                updateEggUI(egg)
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+createControlPanel()
+randomizeAllEggs()
