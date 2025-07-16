@@ -2,7 +2,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 
-local RANDOMIZE_INTERVAL = 30
+local RANDOMIZE_INTERVAL = 10
 local countdown = RANDOMIZE_INTERVAL
 local running = true
 local autoStopEnabled = true
